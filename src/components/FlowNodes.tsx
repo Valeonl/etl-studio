@@ -13,7 +13,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   ynode: Y.Map<unknown>;
   result?: NodeResult;
   upstream: string[];
-  onUpload?: (nodeId: string, csvText: string) => void;
+  onDelete?: (nodeId: string) => void;
 }
 
 export function SourceNode({ id, data, selected }: NodeProps) {
@@ -35,6 +35,7 @@ export function SourceNode({ id, data, selected }: NodeProps) {
       selected={selected}
       hasInput={false}
       hasOutput
+      onDelete={() => d.onDelete?.(id)}
       footer={
         <div className="node__actions">
           <button className="btn btn--ghost" onClick={() => fileInput.current?.click()}>
@@ -50,7 +51,6 @@ export function SourceNode({ id, data, selected }: NodeProps) {
               const file = event.target.files?.[0];
               if (!file) return;
               const text = await file.text();
-              d.onUpload?.(id, text);
               setCsv(text);
               event.target.value = "";
             }}
@@ -85,6 +85,7 @@ export function SqlNode({ id, data, selected }: NodeProps) {
       selected={selected}
       hasInput
       hasOutput
+      onDelete={() => d.onDelete?.(id)}
       footer={
         <div className="node__actions">
           <span className="muted">
@@ -120,6 +121,7 @@ export function PreviewNode({ id, data, selected }: NodeProps) {
       selected={selected}
       hasInput
       hasOutput={false}
+      onDelete={() => d.onDelete?.(id)}
       footer={
         <div className="node__actions">
           <button

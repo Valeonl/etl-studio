@@ -14,6 +14,7 @@ export interface NodeShellProps {
   selected?: boolean;
   hasInput: boolean;
   hasOutput: boolean;
+  onDelete?: () => void;
   children: ReactNode;
   footer?: ReactNode;
 }
@@ -50,6 +51,16 @@ export function NodeShell(props: NodeShellProps) {
           onChange={(e) => edit("title", e.target.value)}
         />
         <span className="node__kind">{KIND_LABEL[kind]}</span>
+        <button
+          className="node__del"
+          title="Удалить узел"
+          onClick={(event) => {
+            event.stopPropagation();
+            props.onDelete?.();
+          }}
+        >
+          ✕
+        </button>
       </header>
 
       <div className="node__body">{children}</div>

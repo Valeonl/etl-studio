@@ -15,6 +15,7 @@
  */
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
+import { IndexeddbPersistence } from "y-indexeddb";
 
 export type YNode = Y.Map<unknown>;
 
@@ -28,6 +29,7 @@ export interface Peer {
 export interface CollabSession {
   doc: Y.Doc;
   provider: WebrtcProvider;
+  persistence: IndexeddbPersistence;
   nodes: Y.Map<YNode>;
   edges: Y.Map<Y.Map<unknown>>;
   meta: Y.Map<unknown>;
@@ -79,30 +81,54 @@ export function createSession(room: string): CollabSession {
   const meta = doc.getMap<unknown>("meta");
   const self = selfIdentity();
 
+  // Local durability: without it a reload started from an empty doc and re-seeded the demo over
+  // whatever the user had built — the "nodes disappeared by themselves" report.
+  const persistence = new IndexeddbPersistence(`etl-studio-${room}`, doc);
+
   const provider = new WebrtcProvider(`etl-studio-${room}`, doc, {
-    // Public signalling; a room is namespaced by prefix so we never collide with other demos.
+    // Public signalling hosts. `signaling.yjs.dev` — the default in the y-webrtc docs — moved out
+    // from under everyone (DNS: ENOTFOUND, measured 2026-09-24), and the two heroku ones are dead
+    // services answering 404; the two below still complete a WS handshake.
     signaling: [
-      "wss://signaling.yjs.dev",
       "wss://y-webrtc-eu.fly.dev",
       "wss://signaling.fly.dev",
+      "wss://demos.yjs.dev/ws",
     ],
     maxConns: 20,
     awareness: undefined,
   });
   provider.awareness.setLocalStateField("user", self);
 
-  // A new room starts with one source node — an empty canvas gives no hint of what to do.
-  window.setTimeout(() => {
-    if (nodes.size === 0 && edges.size === 0) {
-      seedWorkflow(nodes, edges);
+  /**
+   * Seed the demo workflow into a *new* room, exactly once.
+   *
+   * The flag lives in the CRDT rather than in a per-client timer: two people opening an empty room
+   * simultaneously cannot both seed it (the second sees the first's flag once they sync), and a
+   * reload of a room that already has work never overwrites it.
+   */
+  const seedIfEmpty = () => {
+    if (meta.get("seeded")) return;
+    if (nodes.size > 0 || edges.size > 0) {
+      meta.set("seeded", true);   // someone else's work is here — adopt it, do not add to it
+      return;
     }
-  }, 1200);
+    doc.transact(() => {
+      seedWorkflow(nodes, edges);
+      meta.set("seeded", true);
+    }, "seed");
+  };
 
-  for (const [key, node] of nodes) {
-    if (!isValidNode(node)) nodes.delete(key);
-  }
+  persistence.whenSynced.then(() => {
+    // A returning visitor has content on disk: mark the room seeded before the grace timer fires.
+    if (nodes.size > 0 || edges.size > 0) meta.set("seeded", true);
+    for (const [key, node] of nodes) {
+      if (!isValidNode(node)) nodes.delete(key);   // junk written by an older build
+    }
+  });
 
-  return { doc, provider, nodes, edges, meta, room, self };
+  window.setTimeout(seedIfEmpty, 2500);
+
+  return { doc, provider, persistence, nodes, edges, meta, room, self };
 }
 
 /** A demo workflow lands in a fresh room: source → SQL → preview, connected and runnable. */

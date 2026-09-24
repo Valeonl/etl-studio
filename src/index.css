@@ -77,6 +77,11 @@ code { background: #1d2734; padding: 1px 5px; border-radius: 4px; }
 }
 .node__title:focus { outline: none; border-bottom: 1px dashed var(--line); }
 .node__kind { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+.node__del {
+  background: transparent; border: none; color: #64748b; cursor: pointer;
+  font-size: 12px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+}
+.node__del:hover { color: #ffb3b3; background: rgba(255, 107, 107, .12); }
 .node__body { margin: 4px 0; }
 .node__text {
   width: 100%; height: 110px; resize: vertical; background: #0e141c; color: var(--text);

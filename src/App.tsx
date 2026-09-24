@@ -105,6 +105,23 @@ function Studio() {
 
   const { screenToFlowPosition } = useReactFlow();
 
+  /**
+   * Deleting an explicit button, not the Backspace key: on a phone there is no Backspace, and on a
+   * desktop a stray key press next to a selected node silently removed work ("nodes disappeared").
+   */
+  const deleteNode = useCallback((nodeId: string) => {
+    const session = sessionRef.current;
+    if (!session) return;
+    session.doc.transact(() => {
+      session.nodes.delete(nodeId);
+      for (const [key, edge] of session.edges) {
+        if (edge.get("source") === nodeId || edge.get("target") === nodeId) session.edges.delete(key);
+      }
+    }, LOCAL);
+    setNodes((prev) => prev.filter((node) => node.id !== nodeId));
+    setEdges((prev) => prev.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+  }, []);
+
   /** Rebuild the rendered graph from the doc, merged with this client's own (local) results. */
   const rebuild = useCallback(() => {
     const session = sessionRef.current;
@@ -124,11 +141,12 @@ function Studio() {
             ynode: session.nodes.get(node.id) as YNode,
             result: resultsRef.current[node.id],
             upstream: upstreamTables(node.id, wf.nodes, wf.edges),
+            onDelete: deleteNode,
           } as FlowNodeData as unknown as Record<string, unknown>,
         })),
     );
     setEdges(wf.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })));
-  }, []);
+  }, [deleteNode]);
 
   // One session per page load: the Yjs doc is the source of truth, React state only renders it.
   useEffect(() => {
@@ -159,6 +177,7 @@ function Studio() {
       window.clearInterval(timer);
       session.provider.awareness.off("change", onPresence);
       session.provider.destroy();
+      session.persistence.destroy();
       session.doc.destroy();
     };
   }, [rebuild]);
@@ -391,6 +410,7 @@ function Studio() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          deleteKeyCode={null}
           fitView
           minZoom={0.2}
           proOptions={{ hideAttribution: true }}
